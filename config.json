@@ -1,0 +1,13 @@
+{
+  "port": "9672",
+  "req_interval": "15s",
+  "nodes": [
+    {
+      "name": "rabbitmq",
+      "req_interval": "60s",
+      "url": "http://127.0.0.1:15672",
+      "uname": "guest",
+      "password": "guest"
+    }
+  ]
+}
