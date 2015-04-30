@@ -2,25 +2,17 @@
 
 Prometheus exporter for RabbitMQ metrics, based on RabbitMQ HTTP API.
 
-## Dependencies
+### Dependencies
 
-Prometheus client for Golang:
+* Prometheus [client](https://github.com/prometheus/client_golang) for Golang
+* RabbitMQ HTTP API [client](https://github.com/michaelklishin/rabbit-hole)
+* [Logging](https://github.com/Sirupsen/logrus)
 
-    github.com/prometheus/client_golang/prometheus
-
-RabbitMQ HTTP API client:
-
-    github.com/michaelklishin/rabbit-hole
-
-Logging:
-
-    github.com/Sirupsen/logrus
-
-## Usage
+### Usage
 
     $ go run main.go
 
-## Metrics
+### Metrics
 
 Currently available:
 
