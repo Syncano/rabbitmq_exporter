@@ -4,8 +4,8 @@
   "nodes": [
     {
       "name": "rabbitmq",
-      "req_interval": "60s",
-      "url": "http://127.0.0.1:15672",
+      "req_interval": "10s",
+      "url": "http://192.168.33.10:15672",
       "uname": "guest",
       "password": "guest"
     }
