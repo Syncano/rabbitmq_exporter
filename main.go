@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -76,7 +75,7 @@ func unpackMetrics(d *json.Decoder) map[string]float64 {
 	var output map[string]interface{}
 
 	if err := d.Decode(&output); err != nil {
-		fmt.Printf("Error : %s", err)
+		log.Error(err)
 	}
 	metrics := make(map[string]float64)
 
@@ -94,9 +93,8 @@ func getOverview(hostname, username, password string) *json.Decoder {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Printf("Error : %s", err)
+		log.Error(err)
 	}
-
 	return json.NewDecoder(resp.Body)
 }
 
@@ -116,10 +114,11 @@ func runRequestLoop(node Node) {
 		metrics := unpackMetrics(decoder)
 
 		updateMetrics(metrics)
+		log.Info("Metrics updated successfully.")
 
 		dt, err := time.ParseDuration(node.Interval)
 		if err != nil {
-			log.Warningln(err)
+			log.Warn(err)
 			dt = 30 * time.Second
 		}
 		time.Sleep(dt)
@@ -139,6 +138,7 @@ func newConfig(path string) (*Config, error) {
 
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
+		log.Error(err)
 		return nil, err
 	}
 	err = json.Unmarshal(file, &config)
@@ -151,7 +151,7 @@ func main() {
 	updateNodesStats(config)
 
 	http.Handle("/metrics", prometheus.Handler())
-	log.Infof("Starting RabbitMQ exporter on port: %s.\n", config.Port)
+	log.Infof("Starting RabbitMQ exporter on port: %s.", config.Port)
 	http.ListenAndServe(":"+config.Port, nil)
 }
 
