@@ -5,8 +5,10 @@ Prometheus exporter for RabbitMQ metrics, based on RabbitMQ HTTP API.
 ### Dependencies
 
 * Prometheus [client](https://github.com/prometheus/client_golang) for Golang
-* RabbitMQ HTTP API [client](https://github.com/michaelklishin/rabbit-hole)
 * [Logging](https://github.com/Sirupsen/logrus)
+
+[Update]
+* [rabbit-hole](https://github.com/michaelklishin/rabbit-hole) HTTP API was removed from the project because of lacking support for HTTPS
 
 ### Setting up locally
 
@@ -26,7 +28,10 @@ Now your metrics are available through [http://localhost:6060/metrics](http://lo
 
 ### Metrics
 
-Currently available:
+Total number of:
 
-* channels - total number
-* connections - total number
+* channels
+* connections
+* consumers
+* exchanges
+* queues
