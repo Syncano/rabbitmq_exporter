@@ -6,8 +6,8 @@ import (
     "net/http"
     "os"
     "time"
+    "fmt"
 
-    "github.com/michaelklishin/rabbit-hole"
     "github.com/prometheus/client_golang/prometheus"
     "github.com/Sirupsen/logrus"
 )
@@ -21,6 +21,13 @@ var log = logrus.New()
 
 // Listed available metrics
 var (
+    connectionsTotal = prometheus.NewGauge(
+        prometheus.GaugeOpts{
+            Namespace: namespace,
+            Name:      "connections_total",
+            Help:      "Total number of open connections.",
+        },
+    )
     channelsTotal = prometheus.NewGauge(
         prometheus.GaugeOpts{
             Namespace: namespace,
@@ -28,11 +35,25 @@ var (
             Help:      "Total number of open channels.",
         },
     )
-    connectionsTotal = prometheus.NewGauge(
+    queuesTotal = prometheus.NewGauge(
         prometheus.GaugeOpts{
             Namespace: namespace,
-            Name:      "connections_total",
-            Help:      "Total number of open connections.",
+            Name:      "queues_total",
+            Help:      "Total number of queues in use.",
+        },
+    )
+    consumersTotal = prometheus.NewGauge(
+        prometheus.GaugeOpts{
+            Namespace: namespace,
+            Name:      "consumers_total",
+            Help:      "Total number of message consumers.",
+        },
+    )
+    exchangesTotal = prometheus.NewGauge(
+        prometheus.GaugeOpts{
+            Namespace: namespace,
+            Name:      "exchanges_total",
+            Help:      "Total number of exchanges in use.",
         },
     )
 )
@@ -51,6 +72,37 @@ type Node struct {
     Interval   string      `json:"req_interval,omitempty"`
 }
 
+
+func unpackMetrics(d *json.Decoder) map[string]float64 {
+    var output map[string]interface{}
+
+    if err := d.Decode(&output); err != nil {
+        fmt.Printf("Error : %s", err)
+    }
+    metrics := make(map[string]float64)
+
+    for k, v := range output["object_totals"].(map[string]interface{}) {
+        metrics[k] = v.(float64)
+    }
+    return metrics
+}
+
+
+func getOverview(hostname, username, password string) *json.Decoder {
+    client := &http.Client{}
+    req, err := http.NewRequest("GET", hostname + "/api/overview", nil)
+    req.SetBasicAuth(username, password)
+
+    resp, err := client.Do(req)
+
+    if err != nil {
+        fmt.Printf("Error : %s", err)
+    }
+
+    return json.NewDecoder(resp.Body)
+}
+
+
 func updateNodesStats(config *Config) {
     for _, node := range *config.Nodes {
 
@@ -63,9 +115,10 @@ func updateNodesStats(config *Config) {
 
 func runRequestLoop(node Node) {
     for {
-        rmqc, err := rabbithole.NewClient(node.Url, node.Uname, node.Password)
+        decoder := getOverview(node.Url, node.Uname, node.Password)
+        metrics := unpackMetrics(decoder)
 
-        updateMetrics(rmqc)
+        updateMetrics(metrics)
 
         dt, err := time.ParseDuration(node.Interval)
         if err != nil {
@@ -76,13 +129,14 @@ func runRequestLoop(node Node) {
     }
 }
 
-func updateMetrics(client *rabbithole.Client) {
-    r1, _ := client.ListConnections()
-    r2, _ := client.ListChannels()
-
-    channelsTotal.Set(float64(len(r1)))
-    connectionsTotal.Set(float64(len(r2)))
+func updateMetrics(metrics map[string]float64) {
+    channelsTotal.Set(metrics["channels"])
+    connectionsTotal.Set(metrics["connections"])
+    consumersTotal.Set(metrics["consumers"])
+    queuesTotal.Set(metrics["queues"])
+    exchangesTotal.Set(metrics["exchanges"])
 }
+
 
 func newConfig(path string) (*Config, error) {
     var config Config
@@ -94,6 +148,7 @@ func newConfig(path string) (*Config, error) {
     err = json.Unmarshal(file, &config)
     return &config, err
 }
+
 
 func main() {
     log.Out = os.Stdout
@@ -109,4 +164,7 @@ func main() {
 func init() {
     prometheus.MustRegister(channelsTotal)
     prometheus.MustRegister(connectionsTotal)
+    prometheus.MustRegister(queuesTotal)
+    prometheus.MustRegister(exchangesTotal)
+    prometheus.MustRegister(consumersTotal)
 }
