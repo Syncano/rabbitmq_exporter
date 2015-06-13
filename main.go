@@ -20,39 +20,59 @@ var log = logrus.New()
 
 // Listed available metrics
 var (
-	connectionsTotal = prometheus.NewGauge(
+	connectionsTotal = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "connections_total",
 			Help:      "Total number of open connections.",
 		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
 	)
-	channelsTotal = prometheus.NewGauge(
+	channelsTotal = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "channels_total",
 			Help:      "Total number of open channels.",
 		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
 	)
-	queuesTotal = prometheus.NewGauge(
+	queuesTotal = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "queues_total",
 			Help:      "Total number of queues in use.",
 		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
 	)
-	consumersTotal = prometheus.NewGauge(
+	consumersTotal = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "consumers_total",
 			Help:      "Total number of message consumers.",
 		},
+		[]string{
+			// Which node was checked?
+			"node",
+		},
 	)
-	exchangesTotal = prometheus.NewGauge(
+	exchangesTotal = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "exchanges_total",
 			Help:      "Total number of exchanges in use.",
+		},
+		[]string{
+			// Which node was checked?
+			"node",
 		},
 	)
 )
@@ -71,18 +91,18 @@ type Node struct {
 	Interval string `json:"req_interval,omitempty"`
 }
 
-func unpackMetrics(d *json.Decoder) map[string]float64 {
+func unpackMetrics(d *json.Decoder) (map[string]float64, string) {
 	var output map[string]interface{}
 
 	if err := d.Decode(&output); err != nil {
 		log.Error(err)
 	}
 	metrics := make(map[string]float64)
-
 	for k, v := range output["object_totals"].(map[string]interface{}) {
 		metrics[k] = v.(float64)
 	}
-	return metrics
+	nodename, _ := output["node"].(string)
+	return metrics, nodename
 }
 
 func getOverview(hostname, username, password string) *json.Decoder {
@@ -111,9 +131,9 @@ func updateNodesStats(config *Config) {
 func runRequestLoop(node Node) {
 	for {
 		decoder := getOverview(node.Url, node.Uname, node.Password)
-		metrics := unpackMetrics(decoder)
+		metrics, nodename := unpackMetrics(decoder)
 
-		updateMetrics(metrics)
+		updateMetrics(metrics, nodename)
 		log.Info("Metrics updated successfully.")
 
 		dt, err := time.ParseDuration(node.Interval)
@@ -125,12 +145,12 @@ func runRequestLoop(node Node) {
 	}
 }
 
-func updateMetrics(metrics map[string]float64) {
-	channelsTotal.Set(metrics["channels"])
-	connectionsTotal.Set(metrics["connections"])
-	consumersTotal.Set(metrics["consumers"])
-	queuesTotal.Set(metrics["queues"])
-	exchangesTotal.Set(metrics["exchanges"])
+func updateMetrics(metrics map[string]float64, nodename string) {
+	channelsTotal.WithLabelValues(nodename).Set(metrics["channels"])
+	connectionsTotal.WithLabelValues(nodename).Set(metrics["connections"])
+	consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
+	queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
+	exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
 }
 
 func newConfig(path string) (*Config, error) {
@@ -151,6 +171,15 @@ func main() {
 	updateNodesStats(config)
 
 	http.Handle("/metrics", prometheus.Handler())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html>
+             <head><title>RabbitMQ Exporter</title></head>
+             <body>
+             <h1>RabbitMQ Exporter</h1>
+             <p><a href='/metrics'>Metrics</a></p>
+             </body>
+             </html>`))
+	})
 	log.Infof("Starting RabbitMQ exporter on port: %s.", config.Port)
 	http.ListenAndServe(":"+config.Port, nil)
 }
