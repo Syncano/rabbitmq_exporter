@@ -98,63 +98,63 @@ type Node struct {
 }
 
 func sendApiRequest(hostname, username, password, query string) *json.Decoder {
-    client := &http.Client{}
-    req, err := http.NewRequest("GET", hostname+query, nil)
-    req.SetBasicAuth(username, password)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", hostname+query, nil)
+	req.SetBasicAuth(username, password)
 
-    resp, err := client.Do(req)
+	resp, err := client.Do(req)
 
-    if err != nil {
-        log.Error(err)
-    }
-    return json.NewDecoder(resp.Body)
+	if err != nil {
+		log.Error(err)
+	}
+	return json.NewDecoder(resp.Body)
 }
 
 func getOverview(hostname, username, password string) {
 	decoder := sendApiRequest(hostname, username, password, "/api/overview")
-    response := decodeObj(decoder)
+	response := decodeObj(decoder)
 
-    metrics := make(map[string]float64)
-    for k, v := range response["object_totals"].(map[string]interface{}) {
-        metrics[k] = v.(float64)
-    }
-    nodename, _ := response["node"].(string)
+	metrics := make(map[string]float64)
+	for k, v := range response["object_totals"].(map[string]interface{}) {
+		metrics[k] = v.(float64)
+	}
+	nodename, _ := response["node"].(string)
 
-    channelsTotal.WithLabelValues(nodename).Set(metrics["channels"])
-    connectionsTotal.WithLabelValues(nodename).Set(metrics["connections"])
-    consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
-    queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
-    exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
+	channelsTotal.WithLabelValues(nodename).Set(metrics["channels"])
+	connectionsTotal.WithLabelValues(nodename).Set(metrics["connections"])
+	consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
+	queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
+	exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
 }
 
 func getNumberOfMessages(hostname, username, password string) {
 	decoder := sendApiRequest(hostname, username, password, "/api/queues")
-    response := decodeObjArray(decoder)
-    nodename := response[0]["node"].(string)
+	response := decodeObjArray(decoder)
+	nodename := response[0]["node"].(string)
 
 	total_messages := 0.0
 	for _, v := range response {
-        total_messages += v["messages"].(float64)
+		total_messages += v["messages"].(float64)
 	}
 	messagesTotal.WithLabelValues(nodename).Set(total_messages)
 }
 
 func decodeObj(d *json.Decoder) map[string]interface{} {
-    var response map[string]interface{}
+	var response map[string]interface{}
 
-    if err := d.Decode(&response); err != nil {
-        log.Error(err)
-    }
-    return response
+	if err := d.Decode(&response); err != nil {
+		log.Error(err)
+	}
+	return response
 }
 
 func decodeObjArray(d *json.Decoder) []map[string]interface{} {
-    var response []map[string]interface{}
+	var response []map[string]interface{}
 
-    if err := d.Decode(&response); err != nil {
-        log.Error(err)
-    }
-    return response
+	if err := d.Decode(&response); err != nil {
+		log.Error(err)
+	}
+	return response
 }
 
 func updateNodesStats(config *Config) {
@@ -168,11 +168,11 @@ func updateNodesStats(config *Config) {
 }
 
 func runRequestLoop(node Node) {
-    for {
-        getOverview(node.Url, node.Uname, node.Password)
-        getNumberOfMessages(node.Url, node.Uname, node.Password)
+	for {
+		getOverview(node.Url, node.Uname, node.Password)
+		getNumberOfMessages(node.Url, node.Uname, node.Password)
 
-        log.Info("Metrics updated successfully.")
+		log.Info("Metrics updated successfully.")
 
 		dt, err := time.ParseDuration(node.Interval)
 		if err != nil {
