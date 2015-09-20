@@ -97,62 +97,64 @@ type Node struct {
 	Interval string `json:"req_interval,omitempty"`
 }
 
-func unpackMetrics(d *json.Decoder) (map[string]float64, string) {
-	var output map[string]interface{}
+func sendApiRequest(hostname, username, password, query string) *json.Decoder {
+    client := &http.Client{}
+    req, err := http.NewRequest("GET", hostname+query, nil)
+    req.SetBasicAuth(username, password)
 
-	if err := d.Decode(&output); err != nil {
-		log.Error(err)
-	}
-	metrics := make(map[string]float64)
-	for k, v := range output["object_totals"].(map[string]interface{}) {
-		metrics[k] = v.(float64)
-	}
-	nodename, _ := output["node"].(string)
-	return metrics, nodename
+    resp, err := client.Do(req)
+
+    if err != nil {
+        log.Error(err)
+    }
+    return json.NewDecoder(resp.Body)
 }
 
-func getOverview(hostname, username, password string) *json.Decoder {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", hostname+"/api/overview", nil)
-	req.SetBasicAuth(username, password)
+func getOverview(hostname, username, password string) {
+	decoder := sendApiRequest(hostname, username, password, "/api/overview")
+    response := decodeObj(decoder)
 
-	resp, err := client.Do(req)
+    metrics := make(map[string]float64)
+    for k, v := range response["object_totals"].(map[string]interface{}) {
+        metrics[k] = v.(float64)
+    }
+    nodename, _ := response["node"].(string)
 
-	getNumberOfMessages(hostname, username, password)
-
-	if err != nil {
-		log.Error(err)
-	}
-	return json.NewDecoder(resp.Body)
+    channelsTotal.WithLabelValues(nodename).Set(metrics["channels"])
+    connectionsTotal.WithLabelValues(nodename).Set(metrics["connections"])
+    consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
+    queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
+    exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
 }
 
 func getNumberOfMessages(hostname, username, password string) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", hostname+"/api/queues", nil)
-	req.SetBasicAuth(username, password)
-
-	resp, err := client.Do(req)
-
-	if err != nil {
-		log.Error(err)
-	}
-	decoder := json.NewDecoder(resp.Body)
-
-	var output []interface{}
-
-	if err := decoder.Decode(&output); err != nil {
-		log.Error(err)
-	}
+	decoder := sendApiRequest(hostname, username, password, "/api/queues")
+    response := decodeObjArray(decoder)
+    nodename := response[0]["node"].(string)
 
 	total_messages := 0.0
-
-	nodename := output[0].(map[string]interface{})["node"].(string)
-
-	for _, v := range output {
-		total_messages += v.(map[string]interface{})["messages"].(float64)
+	for _, v := range response {
+        total_messages += v["messages"].(float64)
 	}
-
 	messagesTotal.WithLabelValues(nodename).Set(total_messages)
+}
+
+func decodeObj(d *json.Decoder) map[string]interface{} {
+    var response map[string]interface{}
+
+    if err := d.Decode(&response); err != nil {
+        log.Error(err)
+    }
+    return response
+}
+
+func decodeObjArray(d *json.Decoder) []map[string]interface{} {
+    var response []map[string]interface{}
+
+    if err := d.Decode(&response); err != nil {
+        log.Error(err)
+    }
+    return response
 }
 
 func updateNodesStats(config *Config) {
@@ -166,12 +168,11 @@ func updateNodesStats(config *Config) {
 }
 
 func runRequestLoop(node Node) {
-	for {
-		decoder := getOverview(node.Url, node.Uname, node.Password)
-		metrics, nodename := unpackMetrics(decoder)
+    for {
+        getOverview(node.Url, node.Uname, node.Password)
+        getNumberOfMessages(node.Url, node.Uname, node.Password)
 
-		updateMetrics(metrics, nodename)
-		log.Info("Metrics updated successfully.")
+        log.Info("Metrics updated successfully.")
 
 		dt, err := time.ParseDuration(node.Interval)
 		if err != nil {
@@ -180,15 +181,6 @@ func runRequestLoop(node Node) {
 		}
 		time.Sleep(dt)
 	}
-}
-
-func updateMetrics(metrics map[string]float64, nodename string) {
-	channelsTotal.WithLabelValues(nodename).Set(metrics["channels"])
-	connectionsTotal.WithLabelValues(nodename).Set(metrics["connections"])
-	consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
-	queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
-	exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
-	// messagesTotal.WithLabelValues(nodename).Set(metrics["messages"])
 }
 
 func newConfig(path string) (*Config, error) {
