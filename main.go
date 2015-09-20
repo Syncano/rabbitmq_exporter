@@ -38,7 +38,6 @@ var (
 			Help:      "Total number of open channels.",
 		},
 		[]string{
-			// Which node was checked?
 			"node",
 		},
 	)
@@ -49,7 +48,6 @@ var (
 			Help:      "Total number of queues in use.",
 		},
 		[]string{
-			// Which node was checked?
 			"node",
 		},
 	)
@@ -60,7 +58,6 @@ var (
 			Help:      "Total number of message consumers.",
 		},
 		[]string{
-			// Which node was checked?
 			"node",
 		},
 	)
@@ -71,7 +68,16 @@ var (
 			Help:      "Total number of exchanges in use.",
 		},
 		[]string{
-			// Which node was checked?
+			"node",
+		},
+	)
+	messagesTotal = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "messages_total",
+			Help:      "Total number of messages in all queues.",
+		},
+		[]string{
 			"node",
 		},
 	)
@@ -112,10 +118,41 @@ func getOverview(hostname, username, password string) *json.Decoder {
 
 	resp, err := client.Do(req)
 
+	getNumberOfMessages(hostname, username, password)
+
 	if err != nil {
 		log.Error(err)
 	}
 	return json.NewDecoder(resp.Body)
+}
+
+func getNumberOfMessages(hostname, username, password string) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", hostname+"/api/queues", nil)
+	req.SetBasicAuth(username, password)
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		log.Error(err)
+	}
+	decoder := json.NewDecoder(resp.Body)
+
+	var output []interface{}
+
+	if err := decoder.Decode(&output); err != nil {
+		log.Error(err)
+	}
+
+	total_messages := 0.0
+
+	nodename := output[0].(map[string]interface{})["node"].(string)
+
+	for _, v := range output {
+		total_messages += v.(map[string]interface{})["messages"].(float64)
+	}
+
+	messagesTotal.WithLabelValues(nodename).Set(total_messages)
 }
 
 func updateNodesStats(config *Config) {
@@ -151,6 +188,7 @@ func updateMetrics(metrics map[string]float64, nodename string) {
 	consumersTotal.WithLabelValues(nodename).Set(metrics["consumers"])
 	queuesTotal.WithLabelValues(nodename).Set(metrics["queues"])
 	exchangesTotal.WithLabelValues(nodename).Set(metrics["exchanges"])
+	// messagesTotal.WithLabelValues(nodename).Set(metrics["messages"])
 }
 
 func newConfig(path string) (*Config, error) {
@@ -191,4 +229,5 @@ func init() {
 	prometheus.MustRegister(queuesTotal)
 	prometheus.MustRegister(exchangesTotal)
 	prometheus.MustRegister(consumersTotal)
+	prometheus.MustRegister(messagesTotal)
 }
