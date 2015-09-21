@@ -13,7 +13,7 @@ import (
 
 const (
 	namespace  = "rabbitmq"
-	configPath = "config.json"
+	defaultConfigPath = "config.json"
 )
 
 var log = logrus.New()
@@ -196,6 +196,10 @@ func newConfig(path string) (*Config, error) {
 }
 
 func main() {
+	configPath := defaultConfigPath
+	if len(os.Args) > 1 {
+		configPath = os.Args[1]
+	}
 	log.Out = os.Stdout
 	config, _ := newConfig(configPath)
 	updateNodesStats(config)
