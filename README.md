@@ -35,3 +35,4 @@ Total number of:
 * consumers
 * exchanges
 * queues
+* messages
