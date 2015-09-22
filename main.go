@@ -13,7 +13,7 @@ import (
 
 const (
 	namespace  = "rabbitmq"
-	configPath = "config.json"
+	defaultConfigPath = "config.json"
 )
 
 var log = logrus.New()
@@ -106,6 +106,7 @@ func sendApiRequest(hostname, username, password, query string) *json.Decoder {
 
 	if err != nil {
 		log.Error(err)
+		panic(err)
 	}
 	return json.NewDecoder(resp.Body)
 }
@@ -167,38 +168,75 @@ func updateNodesStats(config *Config) {
 	}
 }
 
+func requestData(node Node) {
+	defer func() {
+		if r := recover(); r != nil {
+			dt := 10 * time.Second
+			time.Sleep(dt)
+		}
+	}()
+
+	getOverview(node.Url, node.Uname, node.Password)
+	getNumberOfMessages(node.Url, node.Uname, node.Password)
+
+	log.Info("Metrics updated successfully.")
+
+	dt, err := time.ParseDuration(node.Interval)
+	if err != nil {
+		log.Warn(err)
+		dt = 30 * time.Second
+	}
+	time.Sleep(dt)
+}
+
 func runRequestLoop(node Node) {
 	for {
-		getOverview(node.Url, node.Uname, node.Password)
-		getNumberOfMessages(node.Url, node.Uname, node.Password)
-
-		log.Info("Metrics updated successfully.")
-
-		dt, err := time.ParseDuration(node.Interval)
-		if err != nil {
-			log.Warn(err)
-			dt = 30 * time.Second
-		}
-		time.Sleep(dt)
+		requestData(node)
 	}
 }
 
-func newConfig(path string) (*Config, error) {
-	var config Config
+func loadConfig(path string, c *Config) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			dt := 10 * time.Second
+			time.Sleep(dt)
+		}
+	}()
 
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Error(err)
-		return nil, err
+		panic(err)
 	}
-	err = json.Unmarshal(file, &config)
-	return &config, err
+
+	err = json.Unmarshal(file, c)
+	if err != nil {
+		log.Error(err)
+		panic(err)
+	}
+	return true
+}
+
+func runLoadConfigLoop(path string, c *Config) {
+	for {
+		is_ok := loadConfig(path, c)
+		if is_ok == true {
+			break
+		}
+	}
 }
 
 func main() {
+	configPath := defaultConfigPath
+	if len(os.Args) > 1 {
+		configPath = os.Args[1]
+	}
 	log.Out = os.Stdout
-	config, _ := newConfig(configPath)
-	updateNodesStats(config)
+
+	var config Config
+
+	runLoadConfigLoop(configPath, &config)
+	updateNodesStats(&config)
 
 	http.Handle("/metrics", prometheus.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
