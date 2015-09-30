@@ -7,9 +7,6 @@ Prometheus exporter for RabbitMQ metrics, based on RabbitMQ HTTP API.
 * Prometheus [client](https://github.com/prometheus/client_golang) for Golang
 * [Logging](https://github.com/Sirupsen/logrus)
 
-[Update]
-* [rabbit-hole](https://github.com/michaelklishin/rabbit-hole) HTTP API was removed from the project because of lacking support for HTTPS
-
 ### Setting up locally
 
 1. You need **RabbitMQ**. For local setup I recommend this [docker box](https://github.com/mikaelhg/docker-rabbitmq). It's "one-click" solution.
